@@ -4,7 +4,7 @@ import traceback
 
 app = Flask(__name__)
 
-# --- VARIABLES DE ENTORNO ---
+# --- VARIABLES DE ENTORNO SEGURAS ---
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 VERIFY_TOKEN = os.environ.get("VERIFY_TOKEN", "Iberconsulting_Token_Seguro_2026")
