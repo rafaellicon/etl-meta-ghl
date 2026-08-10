@@ -24,7 +24,7 @@ def obtener_datos():
         # LLAMADA A META ADS
         act_id = f"act_{META_AD_ACCOUNT_ID}"
         meta_url = f"https://graph.facebook.com/v19.0/{act_id}/insights"
-        meta_params = {"fields": "actions,spend", "date_preset": "today", "access_token": META_TOKEN}
+        meta_params = {"fields": "actions,spend", "date_preset": "last_30d", "access_token": META_TOKEN}
         meta_response = requests.get(meta_url, params=meta_params).json()
         
         meta_leads = 0
