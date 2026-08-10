@@ -13,23 +13,14 @@ META_AD_ACCOUNT_ID = os.environ.get("META_AD_ACCOUNT_ID")
 GHL_TOKEN = os.environ.get("GHL_TOKEN")
 GHL_LOCATION_ID = os.environ.get("GHL_LOCATION_ID")
 
-# --- CONEXIÓN A SUPABASE ---
-supabase = None
-try:
-    if SUPABASE_URL and SUPABASE_KEY:
-        from supabase import create_client, Client
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-except Exception as e:
-    print(f"Error conectando a Supabase: {e}")
-
 @app.route('/', methods=['GET'])
 def home():
-    return jsonify({"estado": "activo", "tipo": "Servidor ETL Auditor - Iberconsulting"})
+    return jsonify({"estado": "activo", "tipo": "Servidor ETL Auditor - Iberconsulting"}), 200
 
 @app.route('/auditoria', methods=['GET'])
 def auditar_leads():
     try:
-        # 1. LLAMADA A META ADS (Leads de hoy)
+        # 1. LLAMADA A META ADS (Leads y gasto de hoy)
         act_id = f"act_{META_AD_ACCOUNT_ID}"
         meta_url = f"https://graph.facebook.com/v19.0/{act_id}/insights"
         meta_params = {
@@ -45,13 +36,11 @@ def auditar_leads():
         if "data" in meta_response and len(meta_response["data"]) > 0:
             data = meta_response["data"][0]
             meta_spend = float(data.get("spend", 0))
-            # Buscar la acción específica de 'lead'
             for action in data.get("actions", []):
                 if action.get("action_type") == "lead":
                     meta_leads = int(action.get("value", 0))
 
-        # 2. LLAMADA A GOHIGHLEVEL (Contactos creados hoy)
-        # Nota: La URL usa v2 de LeadConnector
+        # 2. LLAMADA A GOHIGHLEVEL (Buscando contactos con etiquetas)
         ghl_url = "https://services.leadconnectorhq.com/contacts/"
         ghl_headers = {
             "Authorization": f"Bearer {GHL_TOKEN}",
@@ -64,23 +53,28 @@ def auditar_leads():
         }
         ghl_response = requests.get(ghl_url, headers=ghl_headers, params=ghl_params).json()
         
-        ghl_total_contactos = len(ghl_response.get("contacts", []))
+        ghl_leads_meta = 0
+        ghl_pagos_info = 0
         
-        # 3. CONSOLIDACIÓN DE DATOS
+        # Filtramos por las etiquetas que me comentaste
+        for contacto in ghl_response.get("contacts", []):
+            tags = [tag.lower() for tag in contacto.get("tags", [])]
+            if "meta" in tags:
+                ghl_leads_meta += 1
+                if "pago info" in tags:
+                    ghl_pagos_info += 1
+        
+        # 3. EL REPORTE FINAL AUDITADO
         reporte = {
-            "fecha": "hoy",
-            "meta_inversion": meta_spend,
-            "meta_leads_generados": meta_leads,
-            "ghl_contactos_totales": ghl_total_contactos,
-            "fuga_leads": meta_leads - ghl_total_contactos,
-            "cpa_estimado": round(meta_spend / meta_leads, 2) if meta_leads > 0 else 0
+            "1_inversion_meta": f"{meta_spend} EUR",
+            "2_leads_cobrados_por_meta": meta_leads,
+            "3_leads_reales_en_ghl": ghl_leads_meta,
+            "4_fuga_de_leads": meta_leads - ghl_leads_meta,
+            "5_pagos_de_info_exitosos": ghl_pagos_info,
+            "6_costo_por_pago_info": round(meta_spend / ghl_pagos_info, 2) if ghl_pagos_info > 0 else 0
         }
-        
-        # Opcional: Guardar en Supabase automáticamente
-        if supabase:
-            supabase.table("reportes_diarios").insert(reporte).execute()
 
-        return jsonify({"status": "éxito", "data": reporte}), 200
+        return jsonify({"status": "éxito", "reporte": reporte}), 200
 
     except Exception as e:
         error_trace = traceback.format_exc()
